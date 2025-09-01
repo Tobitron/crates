@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Spotify Saved Albums — Next.js + NextAuth + Supabase
 
-## Getting Started
+This app lets you sign in with Spotify, view your saved albums, and save them to a Supabase database.
 
-First, run the development server:
+Setup
 
-```bash
+1) Create a Spotify app
+- Go to https://developer.spotify.com/dashboard and create an app
+- Add redirect URI: `http://localhost:3000/api/auth/callback/spotify`
+- Copy the Client ID and Client Secret
+
+2) Create a Supabase project
+- Create a new Supabase project at https://supabase.com/
+- Open the SQL editor and run the contents of `supabase-schema.sql`
+- Get your `Project URL`, `anon key`, and `service_role` key from Project Settings → API
+
+3) Configure environment variables
+- Copy `.env.local.example` to `.env.local` and fill in values:
+  - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`
+  - `NEXTAUTH_SECRET`: any strong random string
+  - `NEXTAUTH_URL`: `http://localhost:3000`
+  - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (optional here), and `SUPABASE_SERVICE_ROLE_KEY`
+
+4) Run the app
+
+```
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 and sign in with Spotify. Click “Load Saved Albums” to view them, and “Save to Supabase” to store them in your database.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Key files
+- `src/app/api/auth/[...nextauth]/route.ts`: NextAuth handler with Spotify provider
+- `src/lib/auth.ts`: NextAuth options with token refresh
+- `src/app/api/albums/route.ts`: Fetches your Spotify saved albums (with pagination)
+- `src/app/api/save-albums/route.ts`: Fetches and upserts albums into Supabase
+- `src/lib/supabaseAdmin.ts`: Server-side Supabase client (service role)
+- `supabase-schema.sql`: SQL for the `saved_albums` table
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Learn more
+- [Next.js Documentation](https://nextjs.org/docs)
+- [NextAuth.js Docs](https://next-auth.js.org/)
+- [Spotify Web API](https://developer.spotify.com/documentation/web-api)
+- [Supabase JavaScript Client](https://supabase.com/docs/reference/javascript)
