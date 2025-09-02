@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 
 type Album = {
@@ -18,20 +18,29 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAlbums = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/albums");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load albums");
-      setAlbums(data.albums);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Auto-load saved albums for the authenticated user from DB
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/my-albums", { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load albums");
+        if (!cancelled) setAlbums(data.albums ?? []);
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Unknown error");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
   const saveToSupabase = async () => {
     setSaving(true);
@@ -75,13 +84,6 @@ export default function Home() {
       {status === "authenticated" && (
         <div className="flex gap-3 mb-6">
           <button
-            onClick={loadAlbums}
-            disabled={loading}
-            className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {loading ? "Loading…" : "Load Saved Albums"}
-          </button>
-          <button
             onClick={saveToSupabase}
             disabled={saving}
             className="px-3 py-1.5 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60"
@@ -124,8 +126,11 @@ export default function Home() {
         </ul>
       )}
 
-      {status === "authenticated" && !albums && (
-        <p className="opacity-80">Click Load Saved Albums to fetch your library.</p>
+      {status === "authenticated" && loading && (
+        <p className="opacity-80">Loading your saved albums…</p>
+      )}
+      {status === "authenticated" && !loading && albums && albums.length === 0 && (
+        <p className="opacity-80">No saved albums found in your database.</p>
       )}
     </div>
   );
