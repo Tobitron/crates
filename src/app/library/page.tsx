@@ -132,7 +132,8 @@ export default function LibraryPage() {
       });
       const isJson = res.headers.get("content-type")?.includes("application/json");
       const data = isJson ? await res.json() : await res.text();
-      if (!res.ok) throw new Error((isJson ? (data as any).error : data) || "Failed to assign crate");
+      const msg = isJson ? (data as { error?: string }).error : (data as string);
+      if (!res.ok) throw new Error(msg || "Failed to assign crate");
       setAlbums((prev) =>
         (prev || []).map((a) => (a.album_id === assigning ? { ...a, crate_id: assignCrateId || null } : a))
       );
@@ -149,7 +150,8 @@ export default function LibraryPage() {
       });
       const isJson = res.headers.get("content-type")?.includes("application/json");
       const data = isJson ? await res.json() : await res.text();
-      if (!res.ok) throw new Error((isJson ? (data as any).error : data) || "Failed to remove from crate");
+      const msg = isJson ? (data as { error?: string }).error : (data as string);
+      if (!res.ok) throw new Error(msg || "Failed to remove from crate");
       setAlbums((prev) => (prev || []).map((a) => (a.album_id === albumId ? { ...a, crate_id: null } : a)));
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Unknown error");

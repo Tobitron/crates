@@ -29,6 +29,9 @@ export async function POST(req: Request) {
     const crateId = body.crate_id ?? null;
     if (!albumId) return NextResponse.json({ error: "album_id is required" }, { status: 400 });
 
+    if (!useBypass && (!session || !session.accessToken)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const userId = useBypass
       ? (devUserId as string)
       : await getSpotifyUserId((session as SessionWithToken).accessToken as string);
@@ -59,6 +62,9 @@ export async function DELETE(req: Request) {
     const albumId = (searchParams.get("album_id") || "").trim();
     if (!albumId) return NextResponse.json({ error: "album_id is required" }, { status: 400 });
 
+    if (!useBypass && (!session || !session.accessToken)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const userId = useBypass
       ? (devUserId as string)
       : await getSpotifyUserId((session as SessionWithToken).accessToken as string);
@@ -78,4 +84,3 @@ export async function DELETE(req: Request) {
     );
   }
 }
-
