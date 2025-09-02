@@ -13,14 +13,20 @@ type Album = {
 
 export default function Home() {
   const { data: session, status } = useSession();
+  const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS === "1";
   const [albums, setAlbums] = useState<Album[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creatingCrate, setCreatingCrate] = useState(false);
+  const [crateName, setCrateName] = useState("");
+  const [crateDescription, setCrateDescription] = useState("");
+  const [crateSubmitting, setCrateSubmitting] = useState(false);
+  const [crateError, setCrateError] = useState<string | null>(null);
 
-  // Auto-load saved albums for the authenticated user from DB
+  // Auto-load saved albums from DB
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status === "loading") return;
     let cancelled = false;
     const load = async () => {
       setLoading(true);
@@ -41,6 +47,34 @@ export default function Home() {
       cancelled = true;
     };
   }, [status]);
+
+  const submitCreateCrate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!crateName.trim()) {
+      setCrateError("Name is required");
+      return;
+    }
+    setCrateSubmitting(true);
+    setCrateError(null);
+    try {
+      const res = await fetch("/api/crates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: crateName, description: crateDescription }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create crate");
+      // Close modal and reset
+      setCreatingCrate(false);
+      setCrateName("");
+      setCrateDescription("");
+      // Optionally we could refresh a crates list here
+    } catch (e: unknown) {
+      setCrateError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setCrateSubmitting(false);
+    }
+  };
 
   const saveToSupabase = async () => {
     setSaving(true);
@@ -65,6 +99,12 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <span className="text-sm opacity-80">{session?.user?.name}</span>
             <button
+              onClick={() => setCreatingCrate(true)}
+              className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              Create Crate
+            </button>
+            <button
               onClick={() => signOut()}
               className="px-3 py-1.5 rounded bg-gray-200 dark:bg-neutral-800 hover:bg-gray-300 dark:hover:bg-neutral-700"
             >
@@ -72,12 +112,22 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => signIn("spotify")}
-            className="px-3 py-1.5 rounded bg-green-500 text-white hover:bg-green-600"
-          >
-            Sign in with Spotify
-          </button>
+          <div className="flex items-center gap-3">
+            {devBypass && (
+              <button
+                onClick={() => setCreatingCrate(true)}
+                className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                Create Crate
+              </button>
+            )}
+            <button
+              onClick={() => signIn("spotify")}
+              className="px-3 py-1.5 rounded bg-green-500 text-white hover:bg-green-600"
+            >
+              Sign in with Spotify
+            </button>
+          </div>
         )}
       </header>
 
@@ -103,7 +153,7 @@ export default function Home() {
             <li key={`${a.album_id}`} className="rounded border p-3 flex gap-3 items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={a.images?.[a.images.length - 1]?.url || "/placeholder.png"}
+                src={(a.images && a.images[0]?.url) || "/placeholder.png"}
                 alt={a.album_name}
                 className="w-16 h-16 object-cover rounded"
               />
@@ -126,11 +176,64 @@ export default function Home() {
         </ul>
       )}
 
-      {status === "authenticated" && loading && (
+      {loading && (
         <p className="opacity-80">Loading your saved albums…</p>
       )}
-      {status === "authenticated" && !loading && albums && albums.length === 0 && (
+      {!loading && albums && albums.length === 0 && (
         <p className="opacity-80">No saved albums found in your database.</p>
+      )}
+
+      {creatingCrate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded bg-white dark:bg-neutral-900 p-5 shadow-xl">
+            <h2 className="text-lg font-medium mb-3">Create Crate</h2>
+            <form onSubmit={submitCreateCrate} className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Name</label>
+                <input
+                  type="text"
+                  value={crateName}
+                  onChange={(e) => setCrateName(e.target.value)}
+                  className="w-full rounded border px-3 py-2 bg-transparent"
+                  placeholder="e.g. Road Trip"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Description</label>
+                <textarea
+                  value={crateDescription}
+                  onChange={(e) => setCrateDescription(e.target.value)}
+                  className="w-full rounded border px-3 py-2 bg-transparent"
+                  placeholder="Optional description"
+                  rows={3}
+                />
+              </div>
+              {crateError && (
+                <div className="text-sm text-red-600">{crateError}</div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatingCrate(false);
+                    setCrateError(null);
+                  }}
+                  className="px-3 py-1.5 rounded border"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={crateSubmitting}
+                  className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {crateSubmitting ? "Creating…" : "Create"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

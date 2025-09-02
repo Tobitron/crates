@@ -10,25 +10,32 @@ type SessionWithToken = Session & { accessToken?: string };
 
 export async function GET() {
   const session = (await getServerSession(authOptions)) as SessionWithToken | null;
-  if (!session || !session.accessToken) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const devUserId = process.env.DEV_SPOTIFY_USER_ID;
+  const useBypass = !session?.accessToken && devUserId && process.env.NODE_ENV !== "production";
 
   try {
-    // Derive Spotify user id from access token
-    const meRes = await fetch("https://api.spotify.com/v1/me", {
-      headers: { Authorization: `Bearer ${session.accessToken}` },
-      cache: "no-store",
-    });
-    if (!meRes.ok) {
-      const t = await meRes.text();
-      return NextResponse.json(
-        { error: `Spotify /me failed: ${meRes.status} ${t}` },
-        { status: 500 }
-      );
+    // Get Spotify user id either from session (normal) or dev bypass env
+    let spotifyUserId: string;
+    if (useBypass) {
+      spotifyUserId = devUserId as string;
+    } else {
+      if (!session || !session.accessToken) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      const meRes = await fetch("https://api.spotify.com/v1/me", {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+        cache: "no-store",
+      });
+      if (!meRes.ok) {
+        const t = await meRes.text();
+        return NextResponse.json(
+          { error: `Spotify /me failed: ${meRes.status} ${t}` },
+          { status: 500 }
+        );
+      }
+      const me = (await meRes.json()) as Me;
+      spotifyUserId = me.id;
     }
-    const me = (await meRes.json()) as Me;
-    const spotifyUserId = me.id;
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
