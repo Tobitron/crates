@@ -2,19 +2,22 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import type { Session } from "next-auth";
 
 type Me = { id: string };
 
+type SessionWithToken = Session & { accessToken?: string };
+
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || !(session as any).accessToken) {
+  const session = (await getServerSession(authOptions)) as SessionWithToken | null;
+  if (!session || !session.accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     // Derive Spotify user id from access token
     const meRes = await fetch("https://api.spotify.com/v1/me", {
-      headers: { Authorization: `Bearer ${(session as any).accessToken}` },
+      headers: { Authorization: `Bearer ${session.accessToken}` },
       cache: "no-store",
     });
     if (!meRes.ok) {
@@ -46,4 +49,3 @@ export async function GET() {
     );
   }
 }
-
