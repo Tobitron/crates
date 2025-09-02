@@ -5,8 +5,6 @@ import SpotifyProvider from "next-auth/providers/spotify";
 import { refreshSpotifyAccessToken, SPOTIFY_SCOPES } from "@/lib/spotify";
 
 export const authOptions: NextAuthOptions = {
-  // Enable when running behind a proxy (ngrok/Vercel) or dynamic hosts
-  trustHost: true,
   providers: [
     SpotifyProvider({
       clientId: process.env.SPOTIFY_CLIENT_ID!,
