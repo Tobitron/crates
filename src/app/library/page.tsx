@@ -28,6 +28,19 @@ export default function LibraryPage() {
   const [assigning, setAssigning] = useState<string | null>(null); // album_id being assigned
   const [assignCrateId, setAssignCrateId] = useState<string>("");
   const [assignError, setAssignError] = useState<string | null>(null);
+  // Suggestion workflow (LLM)
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [suggestCrateId, setSuggestCrateId] = useState<string>("");
+  const [suggestPage, setSuggestPage] = useState(0);
+  const SUGGEST_PAGE_SIZE = 500;
+  const SUGGEST_SUBBATCH_SIZE = 100;
+  const [suggestProgressSent, setSuggestProgressSent] = useState(0);
+  const [suggestions, setSuggestions] = useState<
+    Array<{ album_id: string; album_name: string; artist_name: string; release_year?: number | null; reason?: string; score?: number }>
+  >([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Auto-load saved albums from DB
   useEffect(() => {
@@ -89,14 +102,121 @@ export default function LibraryPage() {
         body: JSON.stringify({ name: crateName, description: crateDescription }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create crate");
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to create crate");
+      const crate = (data as { crate: { id: string; name: string } }).crate;
+      // Close modal and reset
       setCreatingCrate(false);
       setCrateName("");
       setCrateDescription("");
+      // Open suggestions modal and fetch suggestions
+      setSuggestCrateId(crate.id);
+      setSuggestOpen(true);
+      setSuggestLoading(true);
+      setSuggestError(null);
+      try {
+        setSuggestProgressSent(0);
+        setSuggestions([]);
+        setSelectedIds(new Set());
+        // Process in sub-batches to update progress
+        const baseOffset = 0;
+        const exclude: string[] = [];
+        for (let inner = 0; inner < SUGGEST_PAGE_SIZE; inner += SUGGEST_SUBBATCH_SIZE) {
+          const sres = await fetch("/api/crates/suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              crate_id: crate.id,
+              offset: baseOffset + inner,
+              limit: Math.min(SUGGEST_SUBBATCH_SIZE, SUGGEST_PAGE_SIZE - inner),
+              exclude_album_ids: exclude,
+            }),
+          });
+          const sdata = await sres.json();
+          if (!sres.ok) throw new Error((sdata as { error?: string }).error || "Failed to get suggestions");
+          const candCount = Number((sdata as { candidates_count?: number }).candidates_count || 0);
+          setSuggestProgressSent((prev) => prev + candCount);
+          const list = (sdata as {
+            suggestions?: Array<{
+              album_id: string;
+              album_name: string;
+              artist_name: string;
+              release_year?: number | null;
+              reason?: string;
+              score?: number;
+            }>;
+          }).suggestions || [];
+          // Deduplicate and accumulate
+          setSuggestions((prev) => {
+            const existing = new Set(prev.map((x) => x.album_id));
+            const merged = [...prev, ...list.filter((s) => !existing.has(s.album_id))];
+            return merged;
+          });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            list.forEach((s) => next.add(s.album_id));
+            return next;
+          });
+          exclude.push(...list.map((s) => s.album_id));
+          // Stop early if API sent no candidates
+          if (candCount === 0) break;
+        }
+        setSuggestPage(0);
+      } catch (err: unknown) {
+        setSuggestError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setSuggestLoading(false);
+      }
     } catch (e: unknown) {
       setCrateError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setCrateSubmitting(false);
+    }
+  };
+
+  const findMoreSuggestions = async () => {
+    if (!suggestCrateId) return;
+    setSuggestLoading(true);
+    setSuggestError(null);
+    try {
+      setSuggestProgressSent(0);
+      const exclude = suggestions.map((s) => s.album_id);
+      const nextPage = suggestPage + 1;
+      const baseOffset = nextPage * SUGGEST_PAGE_SIZE;
+      for (let inner = 0; inner < SUGGEST_PAGE_SIZE; inner += SUGGEST_SUBBATCH_SIZE) {
+        const sres = await fetch("/api/crates/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            crate_id: suggestCrateId,
+            offset: baseOffset + inner,
+            limit: Math.min(SUGGEST_SUBBATCH_SIZE, SUGGEST_PAGE_SIZE - inner),
+            exclude_album_ids: exclude,
+          }),
+        });
+        const sdata = await sres.json();
+        if (!sres.ok) throw new Error((sdata as { error?: string }).error || "Failed to get suggestions");
+        const candCount = Number((sdata as { candidates_count?: number }).candidates_count || 0);
+        setSuggestProgressSent((prev) => prev + candCount);
+        const list = (sdata as {
+          suggestions?: Array<{ album_id: string; album_name: string; artist_name: string; release_year?: number | null; reason?: string; score?: number }>;
+        }).suggestions || [];
+        // Deduplicate and accumulate
+        const existing = new Set(suggestions.map((s) => s.album_id));
+        const newOnes = list.filter((s) => !existing.has(s.album_id));
+        setSuggestions((prev) => [...prev, ...newOnes]);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          newOnes.forEach((s) => next.add(s.album_id));
+          return next;
+        });
+        exclude.push(...list.map((s) => s.album_id));
+        if (candCount === 0) break;
+      }
+      setSuggestPage(nextPage);
+    } catch (err: unknown) {
+      setSuggestError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSuggestLoading(false);
     }
   };
 
@@ -155,6 +275,40 @@ export default function LibraryPage() {
       setAlbums((prev) => (prev || []).map((a) => (a.album_id === albumId ? { ...a, crate_id: null } : a)));
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Unknown error");
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const applySuggestions = async () => {
+    if (!suggestCrateId || selectedIds.size === 0) {
+      setSuggestOpen(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/album-crate/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ crate_id: suggestCrateId, album_ids: Array.from(selectedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to add to crate");
+      // Update local state
+      setAlbums((prev) =>
+        (prev || []).map((a) => (selectedIds.has(a.album_id) ? { ...a, crate_id: suggestCrateId } : a))
+      );
+      setSuggestOpen(false);
+      setSuggestions([]);
+      setSelectedIds(new Set());
+    } catch (e: unknown) {
+      setSuggestError(e instanceof Error ? e.message : "Unknown error");
     }
   };
 
@@ -376,6 +530,80 @@ export default function LibraryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {suggestOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-3xl max-h-[85vh] overflow-auto rounded bg-white dark:bg-neutral-900 p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium">Suggested albums for your new crate</h2>
+              <button className="px-3 py-1.5 rounded border" onClick={() => setSuggestOpen(false)}>
+                Close
+              </button>
+            </div>
+            {suggestLoading && (
+              <div className="flex items-center gap-3 opacity-90 mb-3">
+                <span className="inline-block h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span>
+                  Finding suggestions… Sent {suggestProgressSent} candidates
+                  {` of ${SUGGEST_PAGE_SIZE}`}.
+                </span>
+              </div>
+            )}
+            {suggestError && <div className="mb-3 text-red-600">{suggestError}</div>}
+            {!suggestLoading && suggestions.length === 0 && (
+              <p className="opacity-80">No suggestions found.</p>
+            )}
+            {!suggestLoading && suggestions.length > 0 && (
+              <>
+                <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))] mb-4">
+                  {suggestions.map((s) => (
+                    <li key={s.album_id} className="rounded border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-medium">{s.album_name}</div>
+                          <div className="text-sm opacity-80">{s.artist_name}{s.release_year ? ` • ${s.release_year}` : ""}</div>
+                          {s.reason && <div className="text-xs opacity-70 mt-1">{s.reason}</div>}
+                        </div>
+                        <div className="text-xs opacity-70">
+                          {typeof s.score === "number" ? `${Math.round(s.score * 100)}%` : ""}
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <label className="inline-flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(s.album_id)}
+                            onChange={() => toggleSelect(s.album_id)}
+                          />
+                          Select
+                        </label>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-end gap-2">
+                  <button className="px-3 py-1.5 rounded border" onClick={() => setSuggestOpen(false)}>
+                    Skip
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded border"
+                    onClick={findMoreSuggestions}
+                    disabled={suggestLoading}
+                  >
+                    {suggestLoading ? "Finding…" : "Find More"}
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                    onClick={applySuggestions}
+                  >
+                    Add Selected ({selectedIds.size})
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
