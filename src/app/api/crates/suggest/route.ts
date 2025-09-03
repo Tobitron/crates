@@ -228,7 +228,7 @@ export async function POST(req: Request) {
     let parsed: { suggestions?: Array<{ album_id: string; score?: number; reason?: string }> } = {};
     try {
       parsed = JSON.parse(content);
-    } catch (e) {
+    } catch {
       return NextResponse.json({ error: "LLM returned non-JSON content" }, { status: 500 });
     }
 
