@@ -137,6 +137,16 @@ export default function ErasPage() {
                   />
                   <div className="font-medium">{a.album_name}</div>
                   <div className="text-sm opacity-80">{a.artist_name}</div>
+                  {a.spotify_url && (
+                    <a
+                      href={a.spotify_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700"
+                    >
+                      Listen on Spotify
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
@@ -146,4 +156,3 @@ export default function ErasPage() {
     </div>
   );
 }
-
