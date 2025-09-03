@@ -162,13 +162,21 @@ export default function LibraryPage() {
     <div className="min-h-screen p-8 sm:p-12">
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold">Library</h1>
-        <a
-          href="/"
-          className="px-3 py-1.5 rounded bg-gray-200 dark:bg-neutral-800 hover:bg-gray-300 dark:hover:bg-neutral-700"
-        >
-          Go to Crates
-        </a>
-      {status === "authenticated" ? (
+        <div className="flex items-center gap-2">
+          <a
+            href="/"
+            className="px-3 py-1.5 rounded bg-gray-200 dark:bg-neutral-800 hover:bg-gray-300 dark:hover:bg-neutral-700"
+          >
+            Crates
+          </a>
+          <a
+            href="/eras"
+            className="px-3 py-1.5 rounded bg-gray-200 dark:bg-neutral-800 hover:bg-gray-300 dark:hover:bg-neutral-700"
+          >
+            Eras
+          </a>
+        </div>
+        {status === "authenticated" ? (
           <div className="flex items-center gap-3">
             <span className="text-sm opacity-80">{session?.user?.name}</span>
             <button
@@ -221,8 +229,11 @@ export default function LibraryPage() {
       {albums && albums.length > 0 && (
         <ul className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
           {albums.map((a) => (
-            <li key={`${a.album_id}`} className="relative rounded border p-3 flex gap-3 items-center">
-              <div className="absolute top-2 right-2 flex items-center gap-2">
+            <li
+              key={`${a.album_id}`}
+              className="relative rounded border px-3 pb-3 pt-10 flex gap-3 items-center"
+            >
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
                 {a.crate_id ? (
                   <>
                     <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -248,7 +259,7 @@ export default function LibraryPage() {
               <img
                 src={(a.images && a.images[0]?.url) || "/placeholder.png"}
                 alt={a.album_name}
-                className="w-16 h-16 object-cover rounded"
+                className="w-24 h-24 object-cover rounded"
               />
               <div>
                 <div className="font-medium">{a.album_name}</div>

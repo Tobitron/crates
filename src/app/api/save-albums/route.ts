@@ -10,6 +10,7 @@ type SpotifyAlbum = {
   artists: { name: string }[];
   images: { url: string; width: number; height: number }[];
   external_urls: { spotify: string };
+  release_date?: string;
 };
 
 type SessionWithToken = Session & { accessToken?: string };
@@ -63,6 +64,7 @@ export async function POST() {
 
     const rows = items.map((i) => {
       const a = i.album;
+      const year = a.release_date ? parseInt(a.release_date.slice(0, 4), 10) : null;
       return {
         user_id: spotifyUserId,
         album_id: a.id,
@@ -70,6 +72,7 @@ export async function POST() {
         artist_name: a.artists.map((x) => x.name).join(", "),
         images: a.images,
         spotify_url: a.external_urls?.spotify,
+        release_year: Number.isFinite(year as number) ? (year as number) : null,
         saved_at: i.added_at,
       };
     });

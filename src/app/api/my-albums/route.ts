@@ -40,7 +40,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("saved_albums")
-      .select("album_id, album_name, artist_name, images, spotify_url, saved_at, crate_id")
+      .select("album_id, album_name, artist_name, images, spotify_url, release_year, saved_at, crate_id")
       .eq("user_id", spotifyUserId)
       .order("saved_at", { ascending: false });
 
