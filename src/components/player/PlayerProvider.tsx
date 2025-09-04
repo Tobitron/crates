@@ -33,9 +33,36 @@ type PlayerCtx = {
 const Ctx = createContext<PlayerCtx | undefined>(undefined);
 
 // Minimal types to avoid installing sdk typings
+type PlaybackArtist = { name: string };
+type PlaybackAlbum = { name?: string; images?: Array<{ url: string }> };
+type PlaybackTrack = { name?: string; artists?: PlaybackArtist[]; album?: PlaybackAlbum };
+type PlaybackState = {
+  paused: boolean;
+  position: number;
+  duration: number;
+  track_window?: { current_track?: PlaybackTrack };
+};
+
+type WebPlaybackPlayer = {
+  connect: () => Promise<boolean>;
+  disconnect: () => void;
+  togglePlay: () => Promise<void>;
+  nextTrack: () => Promise<void>;
+  previousTrack: () => Promise<void>;
+  seek: (ms: number) => Promise<void>;
+  setVolume: (v: number) => Promise<void>;
+  addListener: (event: "ready", cb: (arg: { device_id: string }) => void) => void;
+  addListener: (event: "not_ready", cb: (arg: unknown) => void) => void;
+  addListener: (event: "player_state_changed", cb: (state: PlaybackState) => void) => void;
+};
+
+type SpotifyNamespace = {
+  Player: new (opts: { name: string; getOAuthToken: (cb: (t: string) => void) => void }) => WebPlaybackPlayer;
+};
+
 declare global {
   interface Window {
-    Spotify?: any;
+    Spotify?: SpotifyNamespace;
     onSpotifyWebPlaybackSDKReady?: () => void;
   }
 }
@@ -67,7 +94,7 @@ function loadSDK(): Promise<void> {
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<WebPlaybackPlayer | null>(null);
   const [deviceId, setDeviceId] = useState<Nullable<string>>(null);
   const [ready, setReady] = useState(false);
   const [active, setActive] = useState(false);
@@ -85,9 +112,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       try {
         await loadSDK();
         if (cancelled) return;
-        const token = await fetchAccessToken().catch(() => null);
-        if (cancelled) return;
-        const player = new window.Spotify.Player({
+        const player = new window.Spotify!.Player({
           name: "Crates Player",
           getOAuthToken: async (cb: (t: string) => void) => {
             try {
@@ -97,7 +122,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               // ignore; user likely not authed
             }
           },
-          volume,
         });
 
         player.addListener("ready", ({ device_id }: { device_id: string }) => {
@@ -109,7 +133,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           setActive(false);
         });
 
-        player.addListener("player_state_changed", (state: any) => {
+        player.addListener("player_state_changed", (state: PlaybackState) => {
           if (!state) return;
           setPaused(state.paused);
           setPosition(state.position ?? 0);
@@ -117,8 +141,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           const cur = state.track_window?.current_track;
           if (cur) {
             const info: TrackInfo = {
-              name: cur.name,
-              artists: (cur.artists || []).map((a: any) => a.name).join(", "),
+              name: cur.name || "",
+              artists: (cur.artists || []).map((a) => a.name).join(", "),
               album: cur.album?.name || "",
               image: cur.album?.images?.[0]?.url || "",
             };
@@ -131,6 +155,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         playerRef.current = player;
         // Token might be null for a moment; connect anyway, Player will request via getOAuthToken
         await player.connect();
+        // Set initial volume once connected
+        try {
+          await playerRef.current?.setVolume(0.5);
+        } catch {}
       } catch (e) {
         console.error("Failed to init Spotify SDK", e);
       }
@@ -138,7 +166,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
       try {
-        playerRef.current?.disconnect?.();
+        playerRef.current?.disconnect();
       } catch {}
     };
   }, []);
@@ -233,4 +261,3 @@ export function usePlayer(): PlayerCtx {
   if (!ctx) throw new Error("usePlayer must be used within PlayerProvider");
   return ctx;
 }
-

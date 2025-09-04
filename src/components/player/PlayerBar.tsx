@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { usePlayer } from "@/components/player/PlayerProvider";
 
 function msToMinSec(ms: number): string {
@@ -14,8 +14,6 @@ export default function PlayerBar() {
   const { showBar, current, paused, position, duration, volume, togglePlay, next, previous, seek, setVol } = usePlayer();
   const [scrub, setScrub] = useState<number | null>(null);
   const pos = scrub ?? position;
-
-  const progressPct = useMemo(() => (duration > 0 ? Math.min(100, Math.max(0, (pos / duration) * 100)) : 0), [pos, duration]);
 
   if (!showBar || !current) return null;
 
@@ -85,4 +83,3 @@ export default function PlayerBar() {
     </div>
   );
 }
-
