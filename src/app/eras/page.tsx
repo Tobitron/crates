@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PlayerProvider, usePlayer } from "@/components/player/PlayerProvider";
+import PlayerBar from "@/components/player/PlayerBar";
 
 type Album = {
   album_id: string;
@@ -13,11 +15,12 @@ type Album = {
 
 type YearKey = number | "Unknown";
 
-export default function ErasPage() {
+function ErasInner() {
   const [albums, setAlbums] = useState<Album[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openYear, setOpenYear] = useState<YearKey | null>(null);
+  const { playAlbum } = usePlayer();
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +67,7 @@ export default function ErasPage() {
   }, [albums]);
 
   return (
-    <div className="min-h-screen p-8 sm:p-12">
+    <div className="min-h-screen p-8 sm:p-12 pb-24">
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold">Eras</h1>
         <div className="flex gap-2">
@@ -137,16 +140,12 @@ export default function ErasPage() {
                   />
                   <div className="font-medium">{a.album_name}</div>
                   <div className="text-sm opacity-80">{a.artist_name}</div>
-                  {a.spotify_url && (
-                    <a
-                      href={a.spotify_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-block px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700"
-                    >
-                      Listen on Spotify
-                    </a>
-                  )}
+                  <button
+                    onClick={() => playAlbum(a.album_id)}
+                    className="mt-2 inline-block px-3 py-1.5 rounded bg-black text-white hover:opacity-90"
+                  >
+                    Play
+                  </button>
                 </li>
               ))}
             </ul>
@@ -154,5 +153,14 @@ export default function ErasPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ErasPage() {
+  return (
+    <PlayerProvider>
+      <ErasInner />
+      <PlayerBar />
+    </PlayerProvider>
   );
 }
