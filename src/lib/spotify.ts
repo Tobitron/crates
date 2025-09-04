@@ -57,5 +57,9 @@ export async function refreshSpotifyAccessToken(token: Token) {
 export const SPOTIFY_SCOPES = [
   "user-read-email",
   "user-library-read",
+  // Playback (requires Premium)
+  "streaming",
+  "user-read-playback-state",
+  "user-modify-playback-state",
   // add more scopes if needed
 ].join(" ");

@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
+import { PlayerProvider, usePlayer } from "@/components/player/PlayerProvider";
+import PlayerBar from "@/components/player/PlayerBar";
 
 type Album = {
   album_id: string;
@@ -12,7 +14,7 @@ type Album = {
   crate_id?: string | null;
 };
 
-export default function LibraryPage() {
+function LibraryInner() {
   const { data: session, status } = useSession();
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS === "1";
   const [albums, setAlbums] = useState<Album[] | null>(null);
@@ -41,6 +43,7 @@ export default function LibraryPage() {
     Array<{ album_id: string; album_name: string; artist_name: string; release_year?: number | null; reason?: string; score?: number }>
   >([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { playAlbum } = usePlayer();
 
   // Auto-load saved albums from DB
   useEffect(() => {
@@ -313,7 +316,7 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="min-h-screen p-8 sm:p-12">
+    <div className="min-h-screen p-8 sm:p-12 pb-24">
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold">Library</h1>
         <div className="flex items-center gap-2">
@@ -418,16 +421,12 @@ export default function LibraryPage() {
               <div>
                 <div className="font-medium">{a.album_name}</div>
                 <div className="text-sm opacity-80">{a.artist_name}</div>
-                {a.spotify_url && (
-                  <a
-                    href={a.spotify_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Open in Spotify
-                  </a>
-                )}
+                <button
+                  onClick={() => playAlbum(a.album_id)}
+                  className="text-xs px-2 py-1 rounded bg-black text-white hover:opacity-90"
+                >
+                  Play
+                </button>
               </div>
             </li>
           ))}
@@ -608,5 +607,14 @@ export default function LibraryPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LibraryPage() {
+  return (
+    <PlayerProvider>
+      <LibraryInner />
+      <PlayerBar />
+    </PlayerProvider>
   );
 }

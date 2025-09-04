@@ -6,6 +6,22 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 type SessionWithToken = Session & { accessToken?: string };
 
+// Simple in-memory sliding window rate limiter per user+key
+const rlStore = new Map<string, number[]>();
+function rateLimit(userKey: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  const arr = rlStore.get(userKey) || [];
+  const recent = arr.filter((t) => t > cutoff);
+  if (recent.length >= limit) {
+    rlStore.set(userKey, recent);
+    return false;
+  }
+  recent.push(now);
+  rlStore.set(userKey, recent);
+  return true;
+}
+
 async function getSpotifyUserId(accessToken: string): Promise<string> {
   const res = await fetch("https://api.spotify.com/v1/me", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -77,6 +93,13 @@ export async function POST(req: Request) {
   const useBypass = !session?.accessToken && devUserId && process.env.NODE_ENV !== "production";
 
   try {
+    // Production safety guard: do not allow DEV_SPOTIFY_USER_ID to exist in prod
+    if (process.env.NODE_ENV === "production" && process.env.DEV_SPOTIFY_USER_ID) {
+      return NextResponse.json(
+        { error: "DEV_SPOTIFY_USER_ID must not be set in production" },
+        { status: 500 }
+      );
+    }
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: "OPENAI_API_KEY is not set on the server" },
@@ -106,6 +129,12 @@ export async function POST(req: Request) {
     const userId = useBypass
       ? (devUserId as string)
       : await getSpotifyUserId((session as SessionWithToken).accessToken as string);
+
+    // Rate limit: max 3 suggestions per user per minute
+    const ok = rateLimit(`suggest:${userId}`, 3, 60_000);
+    if (!ok) {
+      return NextResponse.json({ error: "Rate limit exceeded. Try again shortly." }, { status: 429 });
+    }
 
     const supabase = getSupabaseAdmin();
 
