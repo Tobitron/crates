@@ -43,18 +43,18 @@ type PlaybackState = {
   track_window?: { current_track?: PlaybackTrack };
 };
 
-type WebPlaybackPlayer = {
-  connect: () => Promise<boolean>;
-  disconnect: () => void;
-  togglePlay: () => Promise<void>;
-  nextTrack: () => Promise<void>;
-  previousTrack: () => Promise<void>;
-  seek: (ms: number) => Promise<void>;
-  setVolume: (v: number) => Promise<void>;
-  addListener: (event: "ready", cb: (arg: { device_id: string }) => void) => void;
-  addListener: (event: "not_ready", cb: (arg: unknown) => void) => void;
-  addListener: (event: "player_state_changed", cb: (state: PlaybackState) => void) => void;
-};
+interface WebPlaybackPlayer {
+  connect(): Promise<boolean>;
+  disconnect(): void;
+  togglePlay(): Promise<void>;
+  nextTrack(): Promise<void>;
+  previousTrack(): Promise<void>;
+  seek(ms: number): Promise<void>;
+  setVolume(v: number): Promise<void>;
+  addListener(event: "ready", cb: (arg: { device_id: string }) => void): void;
+  addListener(event: "not_ready", cb: (arg: unknown) => void): void;
+  addListener(event: "player_state_changed", cb: (state: PlaybackState) => void): void;
+}
 
 type SpotifyNamespace = {
   Player: new (opts: { name: string; getOAuthToken: (cb: (t: string) => void) => void }) => WebPlaybackPlayer;
